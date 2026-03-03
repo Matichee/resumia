@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ResumIA — Resumidor de PDFs</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --accent: #c8f135;
+    --accent2: #7c3aed;
+    --text: #f0f0f5;
+    --muted: #6b6b80;
+    --border: #2a2a3a;
+    --danger: #ef4444;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; overflow-x:hidden; }
+  body::before {
+    content:''; position:fixed; top:-50%; left:-50%; width:200%; height:200%;
+    background: radial-gradient(ellipse at 20% 20%, rgba(124,58,237,0.12) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(200,241,53,0.07) 0%, transparent 50%);
+    animation: bgShift 12s ease-in-out infinite alternate; pointer-events:none; z-index:0;
+  }
+  @keyframes bgShift { 0%{transform:translate(0,0)} 100%{transform:translate(3%,3%)} }
+
+  .wrapper { position:relative; z-index:1; max-width:860px; margin:0 auto; padding:0 20px; }
+
+  /* ---- SCREENS ---- */
+  .screen { display:none; }
+  .screen.active { display:block; }
+
+  /* ---- HEADER ---- */
+  header {
+    padding:28px 0 20px; display:flex; justify-content:space-between; align-items:center;
+    border-bottom:1px solid var(--border); margin-bottom:40px;
+  }
+  .logo { font-family:'Syne',sans-serif; font-weight:800; font-size:1.4rem; letter-spacing:-0.02em; cursor:pointer; }
+  .logo span { color:var(--accent); }
+  .header-right { display:flex; align-items:center; gap:12px; }
+  .user-pill {
+    display:flex; align-items:center; gap:8px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:100px; padding:6px 14px 6px 6px; font-size:0.83rem;
+  }
+  .user-avatar {
+    width:28px; height:28px; border-radius:50%; background:var(--accent2);
+    display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:700; overflow:hidden;
+  }
+  .user-avatar img { width:100%; height:100%; object-fit:cover; }
+  .plan-chip {
+    font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:100px; text-transform:uppercase; letter-spacing:0.05em;
+  }
+  .plan-free { background:rgba(107,107,128,0.2); color:var(--muted); }
+  .plan-medio { background:rgba(200,241,53,0.15); color:var(--accent); }
+  .plan-pro { background:rgba(124,58,237,0.25); color:#a78bfa; }
+  .btn-signout {
+    background:none; border:1px solid var(--border); color:var(--muted);
+    border-radius:8px; padding:6px 12px; font-size:0.8rem; cursor:pointer;
+    font-family:'DM Sans',sans-serif; transition:all 0.15s;
+  }
+  .btn-signout:hover { border-color:var(--danger); color:var(--danger); }
+
+  /* ---- LOGIN SCREEN ---- */
+  .login-wrap {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    min-height:80vh; text-align:center; gap:0;
+  }
+  .login-icon { font-size:3.5rem; margin-bottom:24px; animation:float 3s ease-in-out infinite; }
+  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+  .login-title { font-family:'Syne',sans-serif; font-size:clamp(2rem,6vw,3.5rem); font-weight:800; letter-spacing:-0.03em; line-height:1.05; margin-bottom:12px; }
+  .login-title em { font-style:normal; color:var(--accent); }
+  .login-sub { color:var(--muted); font-size:1rem; font-weight:300; max-width:400px; margin:0 auto 40px; line-height:1.6; }
+  .btn-google {
+    display:flex; align-items:center; gap:12px;
+    background:white; color:#1a1a1a; border:none; border-radius:14px;
+    padding:14px 28px; font-family:'Syne',sans-serif; font-size:1rem; font-weight:700;
+    cursor:pointer; transition:all 0.2s; margin-bottom:16px;
+  }
+  .btn-google:hover { transform:translateY(-2px); box-shadow:0 8px 32px rgba(255,255,255,0.15); }
+  .btn-google svg { width:20px; height:20px; flex-shrink:0; }
+  .login-note { color:var(--muted); font-size:0.78rem; }
+
+  /* ---- PLANS SECTION (inside login) ---- */
+  .plans-preview { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:48px 0 0; width:100%; max-width:640px; }
+  .plan-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:20px 16px; text-align:left; transition:border-color 0.2s;
+  }
+  .plan-card.highlight { border-color:var(--accent); }
+  .plan-card.highlight2 { border-color:var(--accent2); }
+  .plan-name { font-family:'Syne',sans-serif; font-weight:700; font-size:0.9rem; margin-bottom:4px; }
+  .plan-price { font-family:'Syne',sans-serif; font-size:1.6rem; font-weight:800; margin-bottom:10px; }
+  .plan-price span { font-size:0.8rem; font-weight:400; color:var(--muted); }
+  .plan-features { list-style:none; }
+  .plan-features li { font-size:0.78rem; color:var(--muted); margin-bottom:4px; }
+  .plan-features li::before { content:'✓ '; color:var(--accent); }
+
+  /* ---- MAIN APP ---- */
+  .usage-bar-wrap { margin-bottom:28px; }
+  .usage-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .usage-label { font-size:0.82rem; color:var(--muted); }
+  .usage-count { font-family:'Syne',sans-serif; font-weight:700; font-size:0.9rem; }
+  .usage-count.warning { color:#f59e0b; }
+  .usage-count.danger { color:var(--danger); }
+  .bar-bg { background:var(--surface2); border-radius:100px; height:5px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:100px; background:var(--accent); transition:width 0.5s ease; }
+  .bar-fill.warning { background:#f59e0b; }
+  .bar-fill.danger { background:var(--danger); }
+
+  /* Card */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:20px; overflow:hidden; }
+  .upload-zone {
+    padding:40px 36px; border-bottom:1px solid var(--border); cursor:pointer;
+    transition:background 0.2s; position:relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over { background:var(--surface2); }
+  .upload-zone input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+  .upload-inner { display:flex; flex-direction:column; align-items:center; gap:10px; pointer-events:none; }
+  .upload-icon {
+    width:60px; height:60px; background:var(--surface2); border:1px solid var(--border);
+    border-radius:16px; display:flex; align-items:center; justify-content:center; font-size:1.6rem;
+    transition:all 0.2s;
+  }
+  .upload-zone:hover .upload-icon { transform:translateY(-3px); border-color:var(--accent); background:rgba(200,241,53,0.08); }
+  .upload-title { font-family:'Syne',sans-serif; font-size:1rem; font-weight:700; }
+  .upload-sub { color:var(--muted); font-size:0.82rem; }
+  .file-selected {
+    display:none; align-items:center; gap:12px;
+    background:rgba(200,241,53,0.06); border:1px solid rgba(200,241,53,0.2);
+    border-radius:12px; padding:12px 16px; margin-top:14px;
+  }
+  .file-selected.visible { display:flex; }
+  .file-icon { width:38px; height:38px; background:rgba(200,241,53,0.12); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
+  .file-name { font-size:0.88rem; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:280px; }
+  .file-size { font-size:0.75rem; color:var(--muted); margin-top:2px; }
+
+  .options-panel { padding:24px 36px; border-bottom:1px solid var(--border); }
+  .options-label { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); font-weight:500; margin-bottom:12px; }
+  .options-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:8px; }
+  .option-btn {
+    background:var(--surface2); border:1px solid var(--border); color:var(--text);
+    border-radius:10px; padding:11px 14px; cursor:pointer; font-family:'DM Sans',sans-serif;
+    font-size:0.83rem; font-weight:500; transition:all 0.15s; text-align:left;
+    display:flex; align-items:center; gap:7px;
+  }
+  .option-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .option-btn.active { background:rgba(200,241,53,0.1); border-color:var(--accent); color:var(--accent); }
+  .option-btn .pro-tag {
+    margin-left:auto; font-size:0.65rem; background:rgba(124,58,237,0.3);
+    color:#a78bfa; padding:2px 6px; border-radius:4px; font-weight:700;
+  }
+  .option-btn.locked { opacity:0.5; cursor:not-allowed; }
+
+  .action-panel { padding:24px 36px; }
+  .btn-main {
+    width:100%; background:var(--accent); color:#0a0a0f; border:none; border-radius:12px;
+    padding:15px 24px; font-family:'Syne',sans-serif; font-size:1rem; font-weight:700;
+    cursor:pointer; transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  .btn-main:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 8px 32px rgba(200,241,53,0.3); }
+  .btn-main:disabled { opacity:0.4; cursor:not-allowed; transform:none !important; box-shadow:none !important; }
+
+  .error-msg {
+    display:none; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25);
+    border-radius:10px; padding:12px 16px; color:#f87171; font-size:0.85rem; margin-top:10px;
+  }
+  .error-msg.visible { display:block; }
+
+  /* Result */
+  .result-section { display:none; margin-top:20px; }
+  .result-section.visible { display:block; }
+  .result-card { background:var(--surface); border:1px solid var(--border); border-radius:20px; overflow:hidden; }
+  .result-header { padding:18px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .result-title { font-family:'Syne',sans-serif; font-weight:700; font-size:0.95rem; display:flex; align-items:center; gap:8px; }
+  .result-title::before { content:''; width:7px; height:7px; border-radius:50%; background:var(--accent); display:inline-block; }
+  .copy-btn {
+    background:var(--surface2); border:1px solid var(--border); color:var(--muted);
+    border-radius:8px; padding:5px 12px; font-size:0.78rem; cursor:pointer;
+    font-family:'DM Sans',sans-serif; transition:all 0.15s;
+  }
+  .copy-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .result-body { padding:24px; line-height:1.75; font-size:0.93rem; color:#ccccd8; white-space:pre-wrap; min-height:100px; }
+  .loading-state { display:none; flex-direction:column; align-items:center; gap:14px; padding:40px 24px; }
+  .loading-state.visible { display:flex; }
+  .spinner { width:40px; height:40px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .loading-text { color:var(--muted); font-size:0.88rem; }
+
+  .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:16px; }
+  .stat-box { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px; text-align:center; }
+  .stat-num { font-family:'Syne',sans-serif; font-size:1.4rem; font-weight:800; color:var(--accent); }
+  .stat-label { font-size:0.72rem; color:var(--muted); margin-top:3px; }
+
+  /* ---- UPGRADE MODAL ---- */
+  .modal-overlay {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8);
+    z-index:100; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-overlay.visible { display:flex; }
+  .modal {
+    background:var(--surface); border:1px solid var(--border); border-radius:24px;
+    padding:36px; max-width:560px; width:100%; position:relative; animation:modalIn 0.2s ease;
+  }
+  @keyframes modalIn { from{transform:scale(0.95);opacity:0} to{transform:scale(1);opacity:1} }
+  .modal-close {
+    position:absolute; top:16px; right:16px; background:var(--surface2); border:1px solid var(--border);
+    color:var(--muted); width:32px; height:32px; border-radius:8px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; font-size:1rem;
+  }
+  .modal-title { font-family:'Syne',sans-serif; font-size:1.5rem; font-weight:800; margin-bottom:6px; }
+  .modal-sub { color:var(--muted); font-size:0.88rem; margin-bottom:28px; }
+  .plans-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .plan-option {
+    border:2px solid var(--border); border-radius:16px; padding:20px 16px;
+    cursor:pointer; transition:all 0.2s; text-align:center;
+  }
+  .plan-option:hover { border-color:var(--accent); }
+  .plan-option.current { border-color:var(--muted); cursor:default; opacity:0.6; }
+  .plan-option.featured { border-color:var(--accent); background:rgba(200,241,53,0.05); }
+  .plan-option.pro-featured { border-color:var(--accent2); background:rgba(124,58,237,0.05); }
+  .plan-option-name { font-family:'Syne',sans-serif; font-weight:800; font-size:1rem; margin-bottom:4px; }
+  .plan-option-price { font-family:'Syne',sans-serif; font-size:1.8rem; font-weight:800; margin-bottom:12px; }
+  .plan-option-price small { font-size:0.75rem; font-weight:400; color:var(--muted); }
+  .plan-option-features { list-style:none; text-align:left; margin-bottom:16px; }
+  .plan-option-features li { font-size:0.78rem; color:var(--muted); margin-bottom:5px; padding-left:14px; position:relative; }
+  .plan-option-features li::before { content:'✓'; position:absolute; left:0; color:var(--accent); }
+  .btn-upgrade {
+    width:100%; background:var(--accent); color:#0a0a0f; border:none; border-radius:10px;
+    padding:10px; font-family:'Syne',sans-serif; font-size:0.85rem; font-weight:700;
+    cursor:pointer; transition:all 0.15s;
+  }
+  .btn-upgrade:hover { opacity:0.9; }
+  .btn-upgrade.pro { background:var(--accent2); color:white; }
+  .btn-upgrade.disabled { background:var(--surface2); color:var(--muted); cursor:default; }
+  .stripe-note { text-align:center; color:var(--muted); font-size:0.75rem; margin-top:16px; }
+  .stripe-note b { color:var(--text); }
+
+  footer { text-align:center; padding:32px 0; color:var(--muted); font-size:0.78rem; }
+
+  @media(max-width:600px) {
+    .upload-zone, .options-panel, .action-panel { padding:20px 16px; }
+    .options-grid { grid-template-columns:1fr 1fr; }
+    .plans-preview, .plans-grid { grid-template-columns:1fr; }
+    .stats-row { grid-template-columns:1fr 1fr; }
+    .plan-card:last-child { display:none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN SCREEN ===================== -->
+<div id="screenLogin" class="screen active">
+  <div class="wrapper">
+    <div class="login-wrap">
+      <div class="login-icon">📄</div>
+      <h1 class="login-title">Resum<span style="color:var(--accent)">IA</span><br>Tu PDF, <em>resumido</em></h1>
+      <p class="login-sub">Subí cualquier documento y la IA extrae lo más importante en segundos.</p>
+      <button class="btn-google" id="btnGoogleLogin">
+        <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.29-8.16 2.29-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+        Continuar con Google
+      </button>
+      <p class="login-note">Gratis para siempre · Sin tarjeta requerida</p>
+
+      <div class="plans-preview">
+        <div class="plan-card">
+          <div class="plan-name">Gratis</div>
+          <div class="plan-price">$0<span>/mes</span></div>
+          <ul class="plan-features">
+            <li>3 PDFs al mes</li>
+            <li>Resumen y puntos clave</li>
+            <li>Hasta 10MB por PDF</li>
+          </ul>
+        </div>
+        <div class="plan-card highlight">
+          <div class="plan-name" style="color:var(--accent)">Medio</div>
+          <div class="plan-price">$4<span>/mes</span></div>
+          <ul class="plan-features">
+            <li>20 PDFs al mes</li>
+            <li>Todos los modos</li>
+            <li>Historial de resúmenes</li>
+          </ul>
+        </div>
+        <div class="plan-card highlight2">
+          <div class="plan-name" style="color:#a78bfa">Pro</div>
+          <div class="plan-price">$7<span>/mes</span></div>
+          <ul class="plan-features">
+            <li>PDFs ilimitados</li>
+            <li>Chat con el PDF</li>
+            <li>Exportar a Word/PDF</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== APP SCREEN ===================== -->
+<div id="screenApp" class="screen">
+  <div class="wrapper">
+    <header>
+      <div class="logo" onclick="showScreen('app')">Resum<span>IA</span></div>
+      <div class="header-right">
+        <div class="user-pill">
+          <div class="user-avatar" id="userAvatar">?</div>
+          <span id="userName" style="font-size:0.83rem;"></span>
+          <span class="plan-chip plan-free" id="planChip">Gratis</span>
+        </div>
+        <button class="btn-signout" id="btnSignOut">Salir</button>
+      </div>
+    </header>
+
+    <!-- Usage bar -->
+    <div class="usage-bar-wrap" id="usageBarWrap">
+      <div class="usage-header">
+        <span class="usage-label" id="usageLabel">PDFs este mes</span>
+        <span class="usage-count" id="usageCount">0 / 3</span>
+      </div>
+      <div class="bar-bg">
+        <div class="bar-fill" id="barFill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <!-- Upload -->
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept=".pdf" />
+        <div class="upload-inner">
+          <div class="upload-icon">📄</div>
+          <div class="upload-title">Arrastrá tu PDF acá</div>
+          <div class="upload-sub">o hacé clic para seleccionar · Máx. 10MB</div>
+        </div>
+        <div class="file-selected" id="fileSelected">
+          <div class="file-icon">📎</div>
+          <div>
+            <div class="file-name" id="fileName">—</div>
+            <div class="file-size" id="fileSize">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Options -->
+      <div class="options-panel">
+        <div class="options-label">¿Qué querés obtener?</div>
+        <div class="options-grid">
+          <button class="option-btn active" data-mode="resumen">📝 Resumen corto</button>
+          <button class="option-btn" data-mode="puntos">🎯 Puntos clave</button>
+          <button class="option-btn locked" data-mode="preguntas" data-pro="true">❓ FAQ <span class="pro-tag">PRO</span></button>
+          <button class="option-btn locked" data-mode="conclusion" data-pro="true">💡 Conclusión <span class="pro-tag">PRO</span></button>
+        </div>
+      </div>
+
+      <!-- Action -->
+      <div class="action-panel">
+        <button class="btn-main" id="summarizeBtn" disabled>
+          <span>✨</span> Resumir PDF
+        </button>
+        <div class="error-msg" id="errorMsg"></div>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div class="result-section" id="resultSection">
+      <div class="result-card">
+        <div class="result-header">
+          <div class="result-title" id="resultTitle">Resumen</div>
+          <button class="copy-btn" id="copyBtn">Copiar</button>
+        </div>
+        <div class="loading-state" id="loadingState">
+          <div class="spinner"></div>
+          <div class="loading-text">La IA está leyendo tu documento...</div>
+        </div>
+        <div class="result-body" id="resultBody"></div>
+      </div>
+      <div class="stats-row" id="statsRow" style="display:none">
+        <div class="stat-box"><div class="stat-num" id="statWords">—</div><div class="stat-label">palabras originales</div></div>
+        <div class="stat-box"><div class="stat-num" id="statReduced">—</div><div class="stat-label">reducción</div></div>
+        <div class="stat-box"><div class="stat-num" id="statTime">—</div><div class="stat-label">segundos</div></div>
+      </div>
+    </div>
+
+    <!-- Upgrade CTA -->
+    <div id="upgradeCta" style="display:none; margin-top:24px; text-align:center;">
+      <div style="background:var(--surface); border:1px solid rgba(200,241,53,0.25); border-radius:16px; padding:24px;">
+        <div style="font-family:'Syne',sans-serif; font-weight:800; font-size:1.1rem; margin-bottom:6px;">
+          ¿Necesitás más PDFs? 🚀
+        </div>
+        <div style="color:var(--muted); font-size:0.88rem; margin-bottom:16px;">
+          Pasate al plan Medio por $4/mes y procesá 20 PDFs mensuales.
+        </div>
+        <button class="btn-main" style="max-width:240px; margin:0 auto;" onclick="openUpgradeModal()">
+          Ver planes
+        </button>
+      </div>
+    </div>
+
+    <footer>ResumIA · Hecho con Claude AI 🤖</footer>
+  </div>
+</div>
+
+<!-- ===================== UPGRADE MODAL ===================== -->
+<div class="modal-overlay" id="upgradeModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeUpgradeModal()">✕</button>
+    <div class="modal-title">Elegí tu plan</div>
+    <div class="modal-sub">Cancelá cuando quieras. Sin compromisos.</div>
+    <div class="plans-grid">
+      <!-- Free -->
+      <div class="plan-option" id="planOptFree">
+        <div class="plan-option-name">Gratis</div>
+        <div class="plan-option-price">$0<small>/mes</small></div>
+        <ul class="plan-option-features">
+          <li>3 PDFs/mes</li>
+          <li>Resumen y puntos</li>
+          <li>Hasta 10MB</li>
+        </ul>
+        <button class="btn-upgrade disabled" disabled>Plan actual</button>
+      </div>
+      <!-- Medio -->
+      <div class="plan-option featured" id="planOptMedio">
+        <div class="plan-option-name" style="color:var(--accent)">Medio</div>
+        <div class="plan-option-price" style="color:var(--accent)">$4<small>/mes</small></div>
+        <ul class="plan-option-features">
+          <li>20 PDFs/mes</li>
+          <li>Todos los modos</li>
+          <li>Historial</li>
+        </ul>
+        <button class="btn-upgrade" onclick="handleUpgrade('medio')">Suscribirme</button>
+      </div>
+      <!-- Pro -->
+      <div class="plan-option pro-featured" id="planOptPro">
+        <div class="plan-option-name" style="color:#a78bfa">Pro</div>
+        <div class="plan-option-price" style="color:#a78bfa">$7<small>/mes</small></div>
+        <ul class="plan-option-features">
+          <li>Ilimitado</li>
+          <li>Chat con PDF</li>
+          <li>Exportar Word/PDF</li>
+        </ul>
+        <button class="btn-upgrade pro" onclick="handleUpgrade('pro')">Suscribirme</button>
+      </div>
+    </div>
+    <div class="stripe-note">
+      🔒 Pagos seguros con <b>Stripe</b> · Próximamente disponible
+    </div>
+  </div>
+</div>
+
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc, updateDoc, increment }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCvp_lVexrHAYsgpk6LsgBGCLpsbHaqJZo",
+    authDomain: "pdf1-a06b6.firebaseapp.com",
+    projectId: "pdf1-a06b6",
+    storageBucket: "pdf1-a06b6.firebasestorage.app",
+    messagingSenderId: "519870357316",
+    appId: "1:519870357316:web:a270133a49bcb5628c0111",
+    measurementId: "G-9W73TZMTJX"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+
+  const PLAN_LIMITS = { free: 3, medio: 20, pro: Infinity };
+  const PLAN_LABELS = { free: 'Gratis', medio: 'Medio', pro: 'Pro' };
+  const PLAN_CLASSES = { free: 'plan-free', medio: 'plan-medio', pro: 'plan-pro' };
+
+  let currentUser = null;
+  let userData = { plan: 'free', usageThisMonth: 0 };
+
+  // Handle redirect result on page load
+  getRedirectResult(auth).catch(e => console.error('Redirect error:', e));
+
+  // Auth state
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      currentUser = user;
+      await loadOrCreateUser(user);
+      renderUserUI();
+      showScreen('app');
+    } else {
+      currentUser = null;
+      showScreen('login');
+    }
+  });
+
+  async function loadOrCreateUser(user) {
+    const ref = doc(db, 'users', user.uid);
+    const snap = await getDoc(ref);
+    const thisMonth = new Date().toISOString().slice(0,7);
+
+    if (!snap.exists()) {
+      userData = { plan: 'free', usageThisMonth: 0, month: thisMonth };
+      await setDoc(ref, userData);
+    } else {
+      userData = snap.data();
+      // Reset monthly count if new month
+      if (userData.month !== thisMonth) {
+        userData.usageThisMonth = 0;
+        userData.month = thisMonth;
+        await updateDoc(ref, { usageThisMonth: 0, month: thisMonth });
+      }
+    }
+  }
+
+  function renderUserUI() {
+    if (!currentUser) return;
+    // Avatar
+    const avatar = document.getElementById('userAvatar');
+    if (currentUser.photoURL) {
+      avatar.innerHTML = `<img src="${currentUser.photoURL}" alt="avatar">`;
+    } else {
+      avatar.textContent = (currentUser.displayName || 'U')[0].toUpperCase();
+    }
+    document.getElementById('userName').textContent = (currentUser.displayName || '').split(' ')[0];
+
+    // Plan chip
+    const chip = document.getElementById('planChip');
+    chip.textContent = PLAN_LABELS[userData.plan] || 'Gratis';
+    chip.className = 'plan-chip ' + (PLAN_CLASSES[userData.plan] || 'plan-free');
+
+    // Usage bar
+    const limit = PLAN_LIMITS[userData.plan];
+    const used = userData.usageThisMonth || 0;
+    const pct = limit === Infinity ? 0 : Math.min((used / limit) * 100, 100);
+    const countEl = document.getElementById('usageCount');
+    const barFill = document.getElementById('barFill');
+
+    countEl.textContent = limit === Infinity ? `${used} / ∞` : `${used} / ${limit}`;
+
+    if (limit === Infinity) {
+      document.getElementById('usageBarWrap').style.display = 'none';
+    } else {
+      document.getElementById('usageBarWrap').style.display = 'block';
+      barFill.style.width = pct + '%';
+      if (pct >= 100) { countEl.className = 'usage-count danger'; barFill.className = 'bar-fill danger'; }
+      else if (pct >= 66) { countEl.className = 'usage-count warning'; barFill.className = 'bar-fill warning'; }
+      else { countEl.className = 'usage-count'; barFill.className = 'bar-fill'; }
+    }
+
+    // Unlock pro options
+    const proButtons = document.querySelectorAll('.option-btn[data-pro="true"]');
+    proButtons.forEach(btn => {
+      if (userData.plan === 'pro') {
+        btn.classList.remove('locked');
+        btn.querySelector('.pro-tag')?.remove();
+      }
+    });
+
+    // Show upgrade CTA if at limit
+    const cta = document.getElementById('upgradeCta');
+    if (limit !== Infinity && used >= limit) {
+      cta.style.display = 'block';
+    } else {
+      cta.style.display = 'none';
+    }
+
+    // Update modal current plan
+    updateModalPlans();
+  }
+
+  function updateModalPlans() {
+    ['free','medio','pro'].forEach(p => {
+      const el = document.getElementById('planOpt' + p.charAt(0).toUpperCase() + p.slice(1));
+      if (!el) return;
+      const btn = el.querySelector('.btn-upgrade');
+      if (userData.plan === p) {
+        el.classList.add('current');
+        if (btn) { btn.textContent = 'Plan actual'; btn.className = 'btn-upgrade disabled'; btn.disabled = true; }
+      } else {
+        el.classList.remove('current');
+      }
+    });
+  }
+
+  // Google login — redirect works better on mobile
+  document.getElementById('btnGoogleLogin').addEventListener('click', async () => {
+    try { await signInWithRedirect(auth, provider); }
+    catch(e) { console.error(e); alert('Error al iniciar sesión: ' + e.message); }
+  });
+
+  // Sign out
+  document.getElementById('btnSignOut').addEventListener('click', () => signOut(auth));
+
+  // Upgrade handler (Stripe placeholder)
+  window.handleUpgrade = function(plan) {
+    alert(`🚀 ¡Genial! Para activar el plan ${plan === 'medio' ? 'Medio ($4/mes)' : 'Pro ($7/mes)'}, próximamente integraremos Stripe.\n\nPor ahora, contactanos para activarlo manualmente.`);
+    closeUpgradeModal();
+  };
+
+  // Expose userData/currentUser for summarize function
+  window.getCurrentUser = () => currentUser;
+  window.getUserData = () => userData;
+  window.incrementUsage = async () => {
+    if (!currentUser) return;
+    userData.usageThisMonth = (userData.usageThisMonth || 0) + 1;
+    const ref = doc(db, 'users', currentUser.uid);
+    await updateDoc(ref, { usageThisMonth: increment(1) });
+    renderUserUI();
+  };
+</script>
+
+<!-- pdf.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const PLAN_LIMITS = { free: 3, medio: 20, pro: Infinity };
+  const modeLabels = { resumen:'Resumen', puntos:'Puntos clave', preguntas:'Preguntas frecuentes', conclusion:'Conclusión' };
+  const modePrompts = {
+    resumen: 'Hacé un resumen claro y conciso del siguiente documento en español. El resumen debe capturar las ideas principales en 3-5 párrafos cortos.',
+    puntos: 'Extraé los 5 a 8 puntos clave más importantes del siguiente documento en español. Presentalos como una lista con viñetas.',
+    preguntas: 'Generá 5 preguntas frecuentes (FAQ) con sus respuestas basadas en el contenido del siguiente documento en español.',
+    conclusion: 'Escribí una conclusión ejecutiva del siguiente documento en español en 2-3 párrafos.'
+  };
+
+  let selectedFile = null;
+  let selectedMode = 'resumen';
+
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(name === 'login' ? 'screenLogin' : 'screenApp').classList.add('active');
+  }
+  window.showScreen = showScreen;
+
+  // Upload
+  const uploadZone = document.getElementById('uploadZone');
+  const fileInput = document.getElementById('fileInput');
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault(); uploadZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type === 'application/pdf') handleFile(f);
+  });
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+  function handleFile(file) {
+    selectedFile = file;
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSize').textContent = (file.size/1024).toFixed(0) + ' KB';
+    document.getElementById('fileSelected').classList.add('visible');
+    document.getElementById('summarizeBtn').disabled = false;
+    hideError();
+  }
+
+  // Mode
+  document.querySelectorAll('.option-btn:not(.locked)').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedMode = btn.dataset.mode;
+    });
+  });
+  document.querySelectorAll('.option-btn.locked').forEach(btn => {
+    btn.addEventListener('click', () => openUpgradeModal());
+  });
+
+  // Summarize
+  document.getElementById('summarizeBtn').addEventListener('click', async () => {
+    const user = window.getCurrentUser ? window.getCurrentUser() : null;
+    const udata = window.getUserData ? window.getUserData() : { plan:'free', usageThisMonth:0 };
+
+    if (!user) { showError('Necesitás iniciar sesión.'); return; }
+
+    const limit = PLAN_LIMITS[udata.plan] || 3;
+    if ((udata.usageThisMonth || 0) >= limit) {
+      openUpgradeModal(); return;
+    }
+    if (!selectedFile) return;
+
+    hideError();
+    document.getElementById('resultSection').classList.add('visible');
+    document.getElementById('loadingState').classList.add('visible');
+    document.getElementById('resultBody').textContent = '';
+    document.getElementById('statsRow').style.display = 'none';
+    document.getElementById('resultTitle').textContent = modeLabels[selectedMode];
+    document.getElementById('summarizeBtn').disabled = true;
+
+    const startTime = Date.now();
+
+    try {
+      const text = await extractText(selectedFile);
+      if (!text || text.length < 50) throw new Error('No se pudo extraer texto del PDF. Verificá que no sea un PDF escaneado.');
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{ role:'user', content: `${modePrompts[selectedMode]}\n\n---\n\n${text.slice(0,12000)}` }]
+        })
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+
+      const result = data.content[0].text;
+      const elapsed = ((Date.now()-startTime)/1000).toFixed(1);
+      const origWords = text.split(/\s+/).length;
+      const resWords = result.split(/\s+/).length;
+      const reduction = Math.round((1 - resWords/origWords)*100);
+
+      document.getElementById('loadingState').classList.remove('visible');
+      document.getElementById('resultBody').textContent = result;
+      document.getElementById('statWords').textContent = origWords.toLocaleString('es');
+      document.getElementById('statReduced').textContent = reduction + '%';
+      document.getElementById('statTime').textContent = elapsed + 's';
+      document.getElementById('statsRow').style.display = 'grid';
+
+      if (window.incrementUsage) await window.incrementUsage();
+
+    } catch(err) {
+      document.getElementById('loadingState').classList.remove('visible');
+      showError(err.message || 'Ocurrió un error. Intentá de nuevo.');
+    }
+
+    document.getElementById('summarizeBtn').disabled = false;
+  });
+
+  async function extractText(file) {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let text = '';
+    for (let i = 1; i <= Math.min(pdf.numPages, 20); i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map(x => x.str).join(' ') + '\n';
+    }
+    return text.trim();
+  }
+
+  document.getElementById('copyBtn').addEventListener('click', () => {
+    const text = document.getElementById('resultBody').textContent;
+    if (text) {
+      navigator.clipboard.writeText(text);
+      const btn = document.getElementById('copyBtn');
+      btn.textContent = '✓ Copiado';
+      setTimeout(() => btn.textContent = 'Copiar', 2000);
+    }
+  });
+
+  function showError(msg) { const e = document.getElementById('errorMsg'); e.textContent = msg; e.classList.add('visible'); }
+  function hideError() { document.getElementById('errorMsg').classList.remove('visible'); }
+
+  window.openUpgradeModal = function() { document.getElementById('upgradeModal').classList.add('visible'); }
+  window.closeUpgradeModal = function() { document.getElementById('upgradeModal').classList.remove('visible'); }
+  document.getElementById('upgradeModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('upgradeModal')) closeUpgradeModal();
+  });
+</script>
+</body>
+</html>
